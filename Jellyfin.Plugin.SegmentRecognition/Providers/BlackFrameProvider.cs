@@ -373,7 +373,7 @@ public class BlackFrameProvider : IMediaSegmentProvider, IHasOrder
             ClusterFrames(outroFrames, minClusterTicks),
             runtimeTicks,
             config,
-            item is Movie,
+            ItemKinds.IsMovieLike(item),
             [.. outroFrames.Select(f => f.TimestampTicks)]);
         if (outroSegment is not null)
         {
@@ -771,7 +771,7 @@ public class BlackFrameProvider : IMediaSegmentProvider, IHasOrder
             allClusters,
             runtimeTicks,
             config,
-            item is Movie,
+            ItemKinds.IsMovieLike(item),
             [.. frames.Select(f => f.TimestampTicks)]);
         if (outroSegment is not null)
         {

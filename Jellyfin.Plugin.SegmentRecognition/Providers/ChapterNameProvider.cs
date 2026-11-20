@@ -187,7 +187,7 @@ public class ChapterNameProvider : IMediaSegmentProvider, IHasOrder
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         var configHash = ConfigHasher.ChapterName(config);
         var item = _libraryManager.GetItemById(itemId);
-        var isMovie = item is Movie;
+        var isMovie = ItemKinds.IsMovieLike(item);
         var runtimeTicks = item?.RunTimeTicks ?? 0;
         var chapters = _chapterManager.GetChapters(itemId);
 
