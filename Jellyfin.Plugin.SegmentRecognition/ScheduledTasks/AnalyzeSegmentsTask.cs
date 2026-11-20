@@ -1127,11 +1127,16 @@ public class AnalyzeSegmentsTask : IScheduledTask
         return grouped;
     }
 
+    /// <summary>
+    /// Movies plus standalone videos. Loose files in a library (e.g. DVR recordings, home videos)
+    /// resolve as plain <see cref="Video"/> items rather than movies; they get the same per-item
+    /// treatment. Extras owned by another item (trailers, featurettes) are excluded.
+    /// </summary>
     private IReadOnlyList<BaseItem> GetMovieList()
     {
         var query = new InternalItemsQuery
         {
-            IncludeItemTypes = [BaseItemKind.Movie],
+            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Video],
             MediaTypes = [MediaType.Video],
             IsVirtualItem = false,
             DtoOptions = new DtoOptions(true),
@@ -1140,7 +1145,9 @@ public class AnalyzeSegmentsTask : IScheduledTask
             IncludeOwnedItems = true
         };
 
-        return _libraryManager.GetItemList(query);
+        return _libraryManager.GetItemList(query)
+            .Where(ItemKinds.IsMovieLike)
+            .ToList();
     }
 
     /// <summary>
