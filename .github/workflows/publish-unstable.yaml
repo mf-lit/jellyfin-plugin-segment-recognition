@@ -69,7 +69,7 @@ jobs:
 
           Install via repository manifest URL:
           ```
-          https://raw.githubusercontent.com/Shadowghost/jellyfin-plugin-segment-recognition/metadata/unstable/manifest.json
+          https://raw.githubusercontent.com/${{ github.repository }}/metadata/unstable/manifest.json
           ```
 
           ### Changes since main
@@ -110,7 +110,7 @@ jobs:
 
       - name: Update unstable manifest on metadata branch
         run: |
-          REPO="Shadowghost/jellyfin-plugin-segment-recognition"
+          REPO="${{ github.repository }}"
 
           # Clone just the metadata branch into a temporary directory
           git clone --single-branch --branch metadata \

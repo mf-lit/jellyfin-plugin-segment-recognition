@@ -55,7 +55,7 @@ jobs:
 
       - name: Update stable manifest on metadata branch
         run: |
-          REPO="Shadowghost/jellyfin-plugin-segment-recognition"
+          REPO="${{ github.repository }}"
           TAG="${{ steps.version.outputs.tag }}"
 
           # Clone just the metadata branch into a temporary directory

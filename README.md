@@ -57,6 +57,10 @@ other episode in the season has one are discarded.
 
 ## Installation
 
+> **Fork note:** this is a fork of [Shadowghost/jellyfin-plugin-segment-recognition](https://github.com/Shadowghost/jellyfin-plugin-segment-recognition) that also analyzes standalone plain video items (loose files such as DVR recordings). To install this fork, use its manifest instead of the upstream one:
+>
+> `https://raw.githubusercontent.com/mf-lit/jellyfin-plugin-segment-recognition/metadata/stable/manifest.json`
+
 Add one of these repository URLs in **Dashboard > Plugins > Repositories**:
 
 ```text
