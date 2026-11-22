@@ -303,6 +303,31 @@ public class EdlImportProvider : IMediaSegmentProvider, IHasOrder
     }
 
     /// <summary>
+    /// Returns <c>true</c> when an external EDL sits next to the media file and has not been
+    /// imported in its current form: never imported, or written after the last import. Covers
+    /// EDLs that appear after the item was first analyzed (e.g. comskip finishing after the
+    /// recording was scanned) and EDLs edited later.
+    /// </summary>
+    /// <param name="mediaPath">Path to the media file.</param>
+    /// <param name="lastImportUtc">When this provider last processed the item, or <c>null</c>.</param>
+    /// <returns>Whether the EDL still needs importing.</returns>
+    internal static bool NeedsImport(string mediaPath, DateTime? lastImportUtc)
+    {
+        if (string.IsNullOrEmpty(mediaPath))
+        {
+            return false;
+        }
+
+        var edlPath = Path.ChangeExtension(mediaPath, ".edl");
+        if (!File.Exists(edlPath) || IsGeneratedByThisPlugin(edlPath))
+        {
+            return false;
+        }
+
+        return lastImportUtc is null || lastImportUtc.Value < File.GetLastWriteTimeUtc(edlPath);
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when the file carries this plugin's export marker on its first
     /// meaningful line.
     /// </summary>

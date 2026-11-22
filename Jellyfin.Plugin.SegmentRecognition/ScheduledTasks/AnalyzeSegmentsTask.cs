@@ -474,13 +474,20 @@ public class AnalyzeSegmentsTask : IScheduledTask
 
         // 3) Push segments. Comparison may produce results for episodes that had no new work
         //    themselves, so push the whole season whenever we did any new work or ran comparison.
-        if (anyNewWork || ranComparison)
+        //    Episodes whose EDL appeared or changed since the last import are pushed regardless.
+        var pushAll = anyNewWork || ranComparison;
+        if (pushAll)
         {
             _logger.LogDebug("Pushing segments for {Label}", seasonLabel);
-            foreach (var ep in episodes)
+        }
+
+        foreach (var ep in episodes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var edlPending = await HasPendingEdlAsync(ep, libraryOptions, config, cancellationToken).ConfigureAwait(false);
+            if (pushAll || edlPending)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await PushSegmentsAsync(ep, libraryOptions, forceOverwrite, stats, cancellationToken).ConfigureAwait(false);
+                await PushSegmentsAsync(ep, libraryOptions, forceOverwrite || edlPending, stats, cancellationToken, requireAnalysis: !edlPending).ConfigureAwait(false);
             }
         }
     }
@@ -494,10 +501,51 @@ public class AnalyzeSegmentsTask : IScheduledTask
         CancellationToken cancellationToken)
     {
         var libraryOptions = _libraryManager.GetLibraryOptions(movie);
-        if (await AnalyzeItemAsync(movie, libraryOptions, config, staleness, stats, cancellationToken).ConfigureAwait(false))
+        var edlPending = await HasPendingEdlAsync(movie, libraryOptions, config, cancellationToken).ConfigureAwait(false);
+        if (await AnalyzeItemAsync(movie, libraryOptions, config, staleness, stats, cancellationToken).ConfigureAwait(false) || edlPending)
         {
-            await PushSegmentsAsync(movie, libraryOptions, forceOverwrite, stats, cancellationToken).ConfigureAwait(false);
+            await PushSegmentsAsync(movie, libraryOptions, forceOverwrite || edlPending, stats, cancellationToken, requireAnalysis: !edlPending).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Whether the item has an external EDL that is new or changed since the EDL import provider
+    /// last processed it. Such items are pushed even when no other analysis work was done, with
+    /// overwrite so Jellyfin re-runs the providers instead of keeping the old segments.
+    /// </summary>
+    /// <param name="item">The item to check.</param>
+    /// <param name="libraryOptions">The owning library's options.</param>
+    /// <param name="config">Plugin configuration.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Whether the item's EDL still needs importing.</returns>
+    private async Task<bool> HasPendingEdlAsync(
+        BaseItem item,
+        MediaBrowser.Model.Configuration.LibraryOptions libraryOptions,
+        PluginConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        if (!config.EnableEdlImportProvider
+            || string.IsNullOrEmpty(item.Path)
+            || IsProviderDisabled(libraryOptions.DisabledMediaSegmentProviders, ProviderNames.EdlImport))
+        {
+            return false;
+        }
+
+        using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var lastImport = await db.AnalysisStatuses
+            .AsNoTracking()
+            .Where(s => s.ItemId == item.Id && s.ProviderName == ProviderNames.EdlImport)
+            .Select(s => (DateTime?)s.AnalyzedAt)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!EdlImportProvider.NeedsImport(item.Path, lastImport))
+        {
+            return false;
+        }
+
+        _logger.LogInformation("EDL for \"{ItemName}\" is new or changed since its last import; pushing segments", item.Name);
+        return true;
     }
 
     /// <summary>
@@ -975,6 +1023,8 @@ public class AnalyzeSegmentsTask : IScheduledTask
     /// <param name="forceOverwrite">Whether to replace segments Jellyfin already holds.</param>
     /// <param name="stats">Run statistics.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="requireAnalysis">Skip items this plugin never analyzed. <c>false</c> for
+    /// items pushed because their external EDL is new or changed.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <remarks>
     /// The gate is "ever analyzed", not "currently has results". Jellyfin drops a segment only
@@ -987,11 +1037,12 @@ public class AnalyzeSegmentsTask : IScheduledTask
         MediaBrowser.Model.Configuration.LibraryOptions libraryOptions,
         bool forceOverwrite,
         TaskStats stats,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireAnalysis = true)
     {
         using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var analyzed = await db.AnalysisStatuses
+        var analyzed = !requireAnalysis || await db.AnalysisStatuses
             .AnyAsync(s => s.ItemId == item.Id, cancellationToken)
             .ConfigureAwait(false);
 
